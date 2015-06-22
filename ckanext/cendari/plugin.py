@@ -1,5 +1,6 @@
 import os
 import json
+import pylons.config as config
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as toolkit
 import ckan.lib.helpers as helpers
@@ -47,18 +48,25 @@ class CendariAuthPlugin(plugins.SingletonPlugin):
             apiurl  = 'http://localhost:42042/v1/session'
             apijson = {'eppn': userdict['eppn'], 'mail': userdict['mail'], 'cn': userdict['cn']}
             headers = {'content-type': 'application/json'}
-            
             # retrieve username from Data API
-            apiresponse = requests.post(apiurl, data=json.dumps(apijson), headers=headers)
-            response_json = json.loads(apiresponse.content)
-            api_username = str(response_json['username'])
-            log.info('API returned username: ' + api_username + ' ... logging in.')
+            try:
+                apiresponse = requests.post(apiurl, data=json.dumps(apijson), headers=headers, timeout=1)
+                log.info('Data API response status_code: '+ str(apiresponse.status_code))
+                if apiresponse.status_code == 200:
+                    response_json = json.loads(apiresponse.content)
+                    api_username = str(response_json['username'])
+                    log.info('API returned username: ' + api_username + '.')
+                    # check sysadmin status
+                    verify_sysadmin_status(self,api_username)
+                    log.info('Logging in ' + api_username + '.')
 
-            # create a usersession
-            pylons.session['cendari-auth-user'] = api_username
-            pylons.session.save()
-            # redirect to dashboard
-            toolkit.redirect_to(controller='user', action='dashboard')
+                    # create a usersession
+                    pylons.session['cendari-auth-user'] = api_username
+                    pylons.session.save()
+                    # redirect to dashboard
+                    toolkit.redirect_to(controller='user', action='dashboard')
+            except requests.exceptions.Timeout:
+                pass
 
     def identify(self):
         """
@@ -84,6 +92,30 @@ class CendariAuthPlugin(plugins.SingletonPlugin):
         """ Simply passes through an abort. """
         return status_code, detail, headers, comment
 
+def verify_sysadmin_status(self,api_username):
+    '''
+    Checks the shibboleth data for sysadmin privileges and grants or revokes them in CKAN accordingly.
+    '''
+    # get user's groups and list of groups to be made sysadmin
+    isMemberOf_groups = toolkit.request.environ.get('isMemberOf','').split(';')
+    shibboleth_sysadmin_groups = config.get('shibboleth_sysadmin_groups', '').split(' ')
+    user = ckan.model.User.by_name(api_username)
+    # if the two lists intersect, the user should be sysadmin
+    groups_intersection = set.intersection(set(shibboleth_sysadmin_groups),set(isMemberOf_groups))
+    if groups_intersection:
+        if not user.sysadmin:
+            user.sysadmin = True
+            ckan.model.Session.add(user)
+            ckan.model.repo.commit_and_remove()
+            log.info('User ' + api_username + ' promoted to sysadmin.')
+    # otherwise he should not be
+    else:
+        if user.sysadmin:
+            user.sysadmin = False
+            ckan.model.Session.add(user)
+            ckan.model.repo.commit_and_remove()
+            log.info('User ' + api_username + ' demoted from sysadmin.')
+    return True
 
 def get_shib_data(self):
     '''
@@ -94,7 +126,9 @@ def get_shib_data(self):
     # take the data from the environment, default to blank
     mail = toolkit.request.environ.get('mail','')
     eppn = toolkit.request.environ.get('eppn','')
-    cn = toolkit.request.environ.get('cn','')
+    sn = toolkit.request.environ.get('sn','')
+    givenName = toolkit.request.environ.get('givenName','')
+    cn = toolkit.request.environ.get('cn',givenName+' '+sn)
     # return something only if there is a mail address
     if mail == '':
         return None

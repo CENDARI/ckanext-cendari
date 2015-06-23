@@ -65,8 +65,20 @@ class CendariAuthPlugin(plugins.SingletonPlugin):
                     pylons.session.save()
                     # redirect to dashboard
                     toolkit.redirect_to(controller='user', action='dashboard')
+            # should the API not respond (in time), lets try logging in directly
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-                pass
+                log.warning('Data API did not respond!')
+                user = ckan.model.User.by_openid(userdict['eppn'])
+                if user:
+                    ckan_user_dict = toolkit.get_action('user_show')(data_dict={'id': user.id})
+                    log.info('logging in existing user with eppn: '+ userdict['eppn'])
+                    # save user to pylons session
+                    pylons.session['cendari-auth-user'] = ckan_user_dict['name']
+                    pylons.session.save()
+                    # redirect to dashboard
+                    toolkit.redirect_to(controller='user', action='dashboard')
+                else:
+                    pass
         else:
                 pass
 

@@ -7,6 +7,7 @@ Features
 ----------------------
 - authentication via Shibboleth
 - login to account provided by CENDARI Data API
+- without Data API response, fall back to log in existing user
 - designate sysadmins through Shibboleth
 
 To define shibboleth groups that will be promoted to sysadmin, add the groups in this way to the `[app:main]` section of the ckan config file:

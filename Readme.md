@@ -9,9 +9,9 @@ Features
 - login to account provided by CENDARI Data API
 - designate sysadmins through Shibboleth
 
-To define shibboleth groups that will be promoted to sysadmin, add this to the `[app:main]` section of the ckan config file:
+To define shibboleth groups that will be promoted to sysadmin, add the groups in this way to the `[app:main]` section of the ckan config file:
 ```
-shibboleth_sysadmin_groups = shib-admins shib-atom-admins
+shibboleth_sysadmin_groups = shib-admins shib-ckan-admins
 ```
 
 TODO

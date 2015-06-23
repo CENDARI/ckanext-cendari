@@ -65,7 +65,9 @@ class CendariAuthPlugin(plugins.SingletonPlugin):
                     pylons.session.save()
                     # redirect to dashboard
                     toolkit.redirect_to(controller='user', action='dashboard')
-            except requests.exceptions.Timeout:
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                pass
+        else:
                 pass
 
     def identify(self):

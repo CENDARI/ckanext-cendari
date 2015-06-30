@@ -38,6 +38,12 @@ class CendariAuthPlugin(plugins.SingletonPlugin):
         Performs the actual login:
         takes Shibboleth data found by :py:func:`get_shib_data`
         and sends it to the CENDARI Data API.
+        
+        The user returned by the API is logged in
+        and the plugin verifies the sysadmin status against the Shibboleth data.
+
+        If the API does not respond, but a user with the right mail address exists in CKAN,
+        this user is logged in.
 
         Finally, a pylons session is created for session management.
         """
@@ -68,10 +74,10 @@ class CendariAuthPlugin(plugins.SingletonPlugin):
             # should the API not respond (in time), lets try logging in directly
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
                 log.warning('Data API did not respond!')
-                user = ckan.model.User.by_openid(userdict['eppn'])
+                user = ckan.model.User.by_email(userdict['mail'])
                 if user:
                     ckan_user_dict = toolkit.get_action('user_show')(data_dict={'id': user.id})
-                    log.info('logging in existing user with eppn: '+ userdict['eppn'])
+                    log.info('logging in existing user ' + ckan_user_dict['name'] + ' based on mail: '+ userdict['mail'])
                     # save user to pylons session
                     pylons.session['cendari-auth-user'] = ckan_user_dict['name']
                     pylons.session.save()
